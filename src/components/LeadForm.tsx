@@ -6,31 +6,32 @@ import {
   validateLead,
   type LeadErrors,
   type LeadField,
-  type LeadPayload,
 } from "@/lib/lead";
 import { submitLead } from "@/lib/submitLead";
-import { PreviewPanel } from "./PreviewPanel";
+import { ResultPanel, type Outcome } from "./ResultPanel";
 
 const inputClass =
   "mt-2 block w-full rounded-md border border-line bg-panel px-3.5 py-2.5 text-base placeholder:text-muted/70 aria-[invalid=true]:border-danger";
 
 export function LeadForm() {
   const [errors, setErrors] = useState<LeadErrors>({});
-  const [pending, setPending] = useState(false);
-  const [preview, setPreview] = useState<LeadPayload | null>(null);
+  const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
   // Changing the key remounts the form, which clears every field.
   const [formKey, setFormKey] = useState(0);
 
+  const pending = outcome.status === "pending";
+  const submitted = outcome.status === "success";
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return; // blocks double submits
+    if (pending || submitted) return; // blocks repeated submissions
 
     const form = event.currentTarget;
     const result = validateLead(Object.fromEntries(new FormData(form)));
 
     if (!result.ok) {
       setErrors(result.errors);
-      setPreview(null);
+      setOutcome({ status: "idle" });
       const first = Object.keys(result.errors)[0];
       const field = form.elements.namedItem(first);
       if (field instanceof HTMLElement) field.focus();
@@ -38,12 +39,14 @@ export function LeadForm() {
     }
 
     setErrors({});
-    setPending(true);
-    try {
-      const response = await submitLead(result.data);
-      setPreview(response.payload);
-    } finally {
-      setPending(false);
+    setOutcome({ status: "pending" });
+
+    const response = await submitLead(result.data);
+    if (response.ok) {
+      setOutcome({ status: "success" });
+    } else {
+      if (response.fieldErrors) setErrors(response.fieldErrors);
+      setOutcome({ status: "error", message: response.message });
     }
   }
 
@@ -58,7 +61,7 @@ export function LeadForm() {
   }
 
   function reset() {
-    setPreview(null);
+    setOutcome({ status: "idle" });
     setErrors({});
     setFormKey((k) => k + 1);
   }
@@ -84,7 +87,8 @@ export function LeadForm() {
           Submit a test lead
         </h2>
         <p className="mt-2 text-muted">
-          Enter a sample inquiry. In this version nothing is sent anywhere.
+          Enter a sample inquiry. It is sent to a live n8n workflow, so please
+          use test data only.
         </p>
 
         <div className="mt-8 space-y-6">
@@ -194,14 +198,14 @@ export function LeadForm() {
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || submitted}
           className="mt-8 w-full rounded-md bg-accent px-5 py-3 font-medium text-white hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
-          {pending ? "Preparing preview…" : "Preview lead"}
+          {pending ? "Processing your lead..." : "Submit lead"}
         </button>
       </form>
 
-      <PreviewPanel payload={preview} onReset={reset} />
+      <ResultPanel outcome={outcome} onReset={reset} />
     </section>
   );
 }

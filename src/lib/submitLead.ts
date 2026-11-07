@@ -1,27 +1,44 @@
-import type { LeadPayload } from "./lead";
+import type { LeadErrors, LeadPayload } from "./lead";
 
-export type SubmitResult = {
-  mode: "local-preview";
-  payload: LeadPayload;
-};
+export type SubmitResult =
+  | { ok: true }
+  | { ok: false; message: string; fieldErrors?: LeadErrors };
+
+type ApiResponse = { ok?: boolean; message?: string; errors?: LeadErrors };
+
+// Slightly longer than the server's own 45 s limit to n8n.
+const CLIENT_TIMEOUT_MS = 55_000;
 
 /**
- * THE ONE SEAM TO CHANGE WHEN CONNECTING n8n.
- *
- * Version 1 (now): nothing leaves the browser. We just hand the validated
- * payload back so the form can show a local preview.
- *
- * Version 2 (next step): replace the body with a same-origin request, e.g.
- *
- *   const res = await fetch("/api/leads", {
- *     method: "POST",
- *     headers: { "Content-Type": "application/json" },
- *     body: JSON.stringify(payload),
- *   });
- *
- * and update SubmitResult to describe the real response.
- * The webhook URL never appears here; it stays on the server.
+ * Sends the lead to our own same-origin route. The browser never sees the
+ * n8n URL or secret; /api/leads (server side) holds both.
  */
 export async function submitLead(payload: LeadPayload): Promise<SubmitResult> {
-  return { mode: "local-preview", payload };
+  try {
+    const response = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS),
+    });
+
+    // The reply may not be JSON (for example a platform error page).
+    const data = (await response.json().catch(() => null)) as ApiResponse | null;
+
+    if (response.ok && data?.ok === true) return { ok: true };
+
+    return {
+      ok: false,
+      message:
+        typeof data?.message === "string"
+          ? data.message
+          : "Something went wrong. Please try again in a moment.",
+      fieldErrors: data?.errors,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "The request took too long or the connection failed. Please try again.",
+    };
+  }
 }

@@ -1,5 +1,5 @@
 const stack = [
-  { name: "Next.js", role: "Front end and, later, a server-side relay" },
+  { name: "Next.js", role: "Front end and server-side relay" },
   { name: "n8n", role: "Workflow automation" },
   { name: "Gemini", role: "Lead research and scoring" },
   { name: "Airtable", role: "Lead records" },

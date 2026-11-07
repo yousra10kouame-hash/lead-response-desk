@@ -30,8 +30,8 @@ export function WorkflowSteps() {
         What happens to a lead
       </h2>
       <p className="mt-2 max-w-2xl text-muted">
-        This is how the existing n8n workflow handles an inquiry. The form
-        above is not connected to it yet.
+        This is how the n8n workflow handles an inquiry. The form above sends
+        each lead to it through a server-side relay.
       </p>
       <ol className="mt-10 grid gap-8 md:grid-cols-4 md:gap-6">
         {steps.map((step, index) => (
